@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#E3EAF4">
+<title>Clasificador de color</title>
+<style>
+:root{--ink:#13202D;--mu:#435366;--line:rgba(19,32,45,.14);--glass:rgba(255,255,255,.58);--edge:rgba(255,255,255,.9);
+ --sh:0 14px 34px -12px rgba(28,48,92,.28);--act:#2B57E0;--g:#16924C;--y:#D99A00;--r:#D2392B;--warn:#B86400;--stop:#C8352A;--go:#11803F;
+ --din:Bahnschrift,"DIN Alternate","DIN 2014","sans-serif-condensed","Roboto Condensed","Arial Narrow",sans-serif;
+ accent-color:var(--act);scrollbar-color:rgba(19,32,45,.3) transparent}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;min-height:100vh;background:#E3EAF4;color:var(--ink);font:15px/1.5 system-ui,"Segoe UI",Roboto,sans-serif;caret-color:var(--act)}
+::selection{background:rgba(43,87,224,.22)}
+h1,h2,h3,.d{font-family:var(--din);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+h3{font-size:18px;font-weight:600;margin:0 0 12px}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--act);outline-offset:2px}
+.mu{color:var(--mu)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+[hidden]{display:none!important}
+
+/* Campo de luz: la máquina tiñe el cristal */
+#amb{position:fixed;inset:0;z-index:-1;overflow:hidden;background:linear-gradient(160deg,#EEF3FA,#DDE5F3 55%,#E7E3F5);transition:filter .8s ease-out}
+#amb i{position:absolute;border-radius:50%;filter:blur(70px);opacity:.75;transition:background-color .9s cubic-bezier(.16,1,.3,1),opacity .9s cubic-bezier(.16,1,.3,1)}
+#amb .o1{width:56vmax;height:56vmax;left:-16vmax;top:-20vmax;background:#9DBBFF}
+#amb .o2{width:46vmax;height:46vmax;right:-14vmax;top:6vmax;background:#BCA9FF}
+#amb .o3{width:46vmax;height:46vmax;left:18vmax;bottom:-26vmax;background:#93E2D8}
+#amb .op{width:42vmax;height:42vmax;right:2vmax;top:24vmax;opacity:0;background:#fff}
+body.s-err #amb .o1{background:#FFD27E}body.s-err #amb .o2{background:#FFB870}body.s-err #amb .o3{background:#FFE3A8}
+body.s-paro #amb .o1{background:#FFA394}body.s-paro #amb .o2{background:#FF8576}body.s-paro #amb .o3{background:#FFC6BA}
+body.offline #amb{filter:grayscale(1)}
+/* Falla: el marco de la pantalla late con un borde difuminado (encima de todo, sin bloquear toques).
+   Paro: el marco late en rojo y toda la pantalla se tiñe de rojo detrás de los paneles; el vidrio lo difumina y el texto sigue nítido. */
+body::before{content:"";position:fixed;inset:0;z-index:20;pointer-events:none;opacity:0}
+body.s-err::before{box-shadow:inset 0 0 70px 22px rgba(224,138,0,.8);animation:mrc 1.6s ease-in-out infinite}
+body.s-paro::before{box-shadow:inset 0 0 90px 30px rgba(210,40,30,.9);animation:mrc 1s ease-in-out infinite}
+#amb::after{content:"";position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,rgba(235,80,64,.42),rgba(205,35,25,.78))}
+body.s-paro #amb::after{animation:roj 1s ease-in-out infinite}
+@keyframes mrc{0%,100%{opacity:.3}50%{opacity:1}}
+@keyframes roj{0%,100%{opacity:.45}50%{opacity:1}}
+
+.glass{background:linear-gradient(180deg,rgba(255,255,255,.4),rgba(255,255,255,0) 44%),var(--glass);-webkit-backdrop-filter:blur(20px) saturate(1.5);backdrop-filter:blur(20px) saturate(1.5);border-radius:16px;
+ box-shadow:inset 0 1px 0 var(--edge),inset 0 0 0 1px rgba(255,255,255,.4),var(--sh)}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.glass{background:rgba(255,255,255,.88)}}
+.pane{padding:20px 22px}
+
+/* Barra superior */
+.bar{position:sticky;top:12px;z-index:10;margin:12px auto 0;max-width:1296px;width:calc(100% - 24px);display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:10px 12px 10px 20px}
+.bar h1{margin:0;font-size:21px;font-weight:600;margin-right:auto}
+.seg{display:flex;gap:4px;padding:4px;border-radius:12px;background:rgba(19,32,45,.07)}
+.seg button{min-height:40px;padding:0 16px;border:0;border-radius:9px;background:transparent;color:var(--mu);font-weight:600;cursor:pointer;transition:background-color .2s ease-out,color .2s ease-out}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-selected=true]{background:#fff;color:var(--ink);box-shadow:0 2px 8px -2px rgba(28,48,92,.3)}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;line-height:18px;border-radius:18px;background:rgba(255,255,255,.62);font-size:14px;font-weight:600;white-space:nowrap}
+.dot{width:10px;height:10px;border-radius:50%;background:#8A97A8;flex:none;box-shadow:0 0 0 3px rgba(138,151,168,.22)}
+.dot.go{background:var(--g);box-shadow:0 0 0 3px rgba(22,146,76,.2)}.dot.man{background:var(--act);box-shadow:0 0 0 3px rgba(43,87,224,.2)}
+.dot.sim{background:#7A5AF0;box-shadow:0 0 0 3px rgba(122,90,240,.2)}.dot.err{background:#E08A00;box-shadow:0 0 0 3px rgba(224,138,0,.25)}
+.dot.bad{background:var(--r);box-shadow:0 0 0 3px rgba(210,57,43,.22)}
+
+main,.top{max-width:1320px;margin:0 auto;padding:16px 12px 40px}
+.top{padding-bottom:0}
+.note{display:flex;gap:12px;align-items:flex-start;padding:14px 18px;margin-bottom:14px;font-weight:500}
+.note svg{flex:none;margin-top:2px}
+.note.warn{background:rgba(255,239,210,.82)}
+body.offline main{opacity:.55;transition:opacity .4s ease-out}
+
+/* Botones */
+.btn{min-height:48px;padding:0 22px;border:0;border-radius:12px;font:600 17px var(--din);color:#fff;cursor:pointer;white-space:nowrap;
+ box-shadow:0 8px 18px -8px rgba(13,25,45,.5),inset 0 1px 0 rgba(255,255,255,.3);transition:transform .12s ease-out,filter .15s ease-out}
+.btn:hover:not(:disabled){filter:brightness(1.07)}.btn:active:not(:disabled){transform:translateY(1px)}
+.btn:disabled{opacity:.42;cursor:not-allowed;box-shadow:none}
+.go{background:var(--go)}.stop{background:var(--stop)}.rst{background:var(--act)}
+.ghost{background:rgba(255,255,255,.78);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.sm{min-height:44px;padding:0 16px;font-size:16px}
+
+/* Estado */
+.status{display:grid;grid-template-columns:1fr auto;gap:18px 28px;align-items:center;padding:22px 28px 24px;transition:background-color .5s ease-out}
+.segs{display:flex;gap:4px;max-width:360px;margin-top:16px}
+.segs i{flex:1;height:5px;border-radius:3px;background:rgba(19,32,45,.11);transition:background-color .3s ease-out}
+.segs i.done{background:rgba(43,87,224,.35)}.segs i.on{background:var(--act)}.segs i.flt{background:#E08A00}
+.status.paro .segs i.flt{background:var(--r)}
+.hl{display:flex;align-items:center;gap:12px}
+#st{margin:0;font:600 clamp(30px,4.4vw,56px)/1.05 var(--din);letter-spacing:-.015em;text-wrap:balance}
+#ic{width:clamp(30px,3.4vw,44px);height:auto;flex:none}
+#wt{margin:10px 0 0;font-size:clamp(17px,1.6vw,21px);font-weight:600}
+#wt b{font-family:var(--din);font-variant-numeric:tabular-nums;font-weight:600;color:var(--mu)}
+#ms{margin:4px 0 0;font-size:15px}
+.tb{height:6px;border-radius:3px;background:rgba(19,32,45,.11);margin-top:8px;max-width:520px;overflow:hidden}
+.tb i{display:block;height:100%;width:0;background:var(--act);border-radius:3px;transition:width .2s linear}
+#why{margin:10px 0 0;font-size:16px;max-width:68ch}
+.acts{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.acts .btn{min-height:56px;padding:0 28px;font-size:19px}
+.status.err{background:rgba(255,236,206,.8)}.status.err #st{color:#7A4100}
+.status.paro{background:rgba(255,224,218,.84)}.status.paro #st{color:#9C1F15}
+/* Fallas y advertencias: un halo difuminado late alrededor del panel y el título respira con brillo.
+   Sigue activo con reduced-motion a propósito: solo desvanece (no desplaza) y late a 1 Hz o menos, lejos del límite de destellos (3 Hz). */
+@keyframes halo{0%,100%{box-shadow:inset 0 1px 0 var(--edge),inset 0 0 0 1px rgba(255,255,255,.4),0 0 0 0 transparent,var(--sh)}
+ 50%{box-shadow:inset 0 1px 0 var(--edge),inset 0 0 0 1px rgba(255,255,255,.4),0 0 38px 8px var(--hc),var(--sh)}}
+@keyframes txh{0%,100%{opacity:1;text-shadow:0 0 0 transparent}50%{opacity:.5;text-shadow:0 0 16px var(--hc)}}
+.status.err,.note.warn{--hc:rgba(224,138,0,.55)}.status.paro{--hc:rgba(210,57,43,.6)}#secw,.st-msg.bad{--hc:rgba(210,57,43,.5)}
+.status.err,.status.paro,.note.warn{animation:halo 1.6s ease-in-out infinite}
+.status.err #st,.status.paro #st,#secw,.st-msg.bad{animation:txh 1.6s ease-in-out infinite}
+.status.paro,.status.paro #st{animation-duration:1s}
+
+/* Automático */
+.auto{display:grid;grid-template-columns:minmax(300px,400px) 1fr;gap:16px;margin-top:16px;align-items:start}
+.col{display:grid;gap:16px}
+#gf{width:100%;height:auto;display:block}
+#gf .stp rect{fill:rgba(255,255,255,.88);stroke:var(--ink);stroke-width:1.5;transition:fill .3s ease-out}
+#gf .stp .in{fill:none}
+#gf .n{font:600 17px var(--din);fill:var(--ink)}
+#gf .lb{font-size:16px;fill:var(--ink)}
+#gf .tk{fill:none}
+#gf .ln{stroke:var(--ink);stroke-width:1.5;fill:none}
+#gf .tr{stroke:var(--ink);stroke-width:3.5}
+#gf .cd{font-size:13px;fill:var(--mu)}
+#gf .cd.on{fill:var(--ink);font-weight:700}
+#gf .tr.on{stroke:var(--act);stroke-width:5}
+#gf .stp.done rect{fill:#DCE4FF}
+#gf .stp.on rect{fill:var(--act);stroke:var(--act);filter:drop-shadow(0 4px 10px rgba(43,87,224,.55))}
+#gf .stp.on .in{stroke:#fff}
+#gf .stp.on .n,#gf .stp.on .tk{fill:#fff}
+#gf .stp.on .lb{font-weight:700}
+#gf .stp.flt rect{fill:#FFC861;stroke:#7A4100}
+#gf.paro .stp.flt rect{fill:#FF9F94;stroke:#9C1F15}
+#gf .stp.flt .lb{font-weight:700}
+.mach{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:8px 24px;align-items:end}
+.mach figure{margin:0}
+.mach #car{max-width:340px;display:block}
+.mach figcaption{font-size:14px;color:var(--mu);margin-top:4px}
+.pz{display:flex;gap:14px;align-items:center;grid-column:1/-1;padding-top:16px;margin-top:6px;border-top:1px solid var(--line)}
+.sw{--pc:#B9C3D0;width:56px;height:56px;border-radius:50%;flex:none;
+ background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.92),rgba(255,255,255,0) 42%),radial-gradient(circle at 70% 82%,rgba(0,0,0,.2),rgba(0,0,0,0) 58%),var(--pc);
+ box-shadow:0 10px 22px -8px var(--pc),inset 0 0 0 1px rgba(255,255,255,.55),0 0 0 4px rgba(255,255,255,.6);transition:box-shadow .6s ease-out}
+/* LED de la tarjeta */
+.ledrow{display:flex;gap:14px;align-items:center;margin-bottom:10px}
+input[type=color]{-webkit-appearance:none;appearance:none;width:64px;height:40px;padding:0;border:0;border-radius:10px;background:none;cursor:pointer;box-shadow:inset 0 0 0 1px var(--line)}
+input[type=color]::-webkit-color-swatch-wrapper{padding:3px}input[type=color]::-webkit-color-swatch{border:0;border-radius:8px}
+input[type=color]::-moz-color-swatch{border:0;border-radius:8px}
+.leg{list-style:none;margin:0;padding:0}
+.leg li{display:flex;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.leg li:first-child{border-top:0}
+.leg i{width:14px;height:14px;border-radius:50%;flex:none;background:var(--b,var(--c));box-shadow:0 0 0 3px rgba(255,255,255,.75),0 0 10px var(--c)}
+.leg .br{animation:br 2s ease-in-out infinite}.leg .bl{animation:bl .5s steps(1) infinite}.leg .fa{animation:bl .25s steps(1) infinite}.leg .alt{animation:alt .5s steps(1) infinite}
+@keyframes br{50%{opacity:.25}}@keyframes bl{50%{opacity:.08}}@keyframes alt{50%{background:#D2392B}}
+/* Ruleta de vidrio */
+.carf{display:flex;flex-direction:column;align-items:center}
+#car{max-width:440px;display:block;overflow:visible}
+#car .sec{fill-opacity:.9;transition:opacity .4s ease-out,filter .4s ease-out}
+#car.lit .sec{opacity:.62}
+#car.lit .sec.on{opacity:1;filter:drop-shadow(0 0 7px rgba(255,255,255,.95)) brightness(1.06)}
+#ndg,#tray{transform-box:view-box;transition:transform .2s linear}
+#ndg{transform-origin:110px 115px}#tray{transform-origin:22px 66px}
+#tpz{transition:opacity .3s ease-out,fill .4s ease-out}
+.mix{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:2px 0 16px;background:rgba(19,32,45,.08);box-shadow:inset 0 1px 2px rgba(19,32,45,.14)}
+.mix i{background:linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,0) 70%),var(--c);transition:flex-grow .5s cubic-bezier(.16,1,.3,1)}
+.pz .d{font-size:26px;font-weight:600;line-height:1.15}
+.cnt{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.cnt div{padding-top:10px;position:relative}
+.cnt div::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;border-radius:2px;background:var(--c)}
+.cnt b{display:block;font:600 36px/1.1 var(--din);font-variant-numeric:tabular-nums}
+.cnt span{font-size:14px;color:var(--mu)}
+.cnt-h{display:flex;justify-content:space-between;align-items:baseline}
+.cnt-h span{font-size:14px;color:var(--mu)}
+
+/* Manual */
+.gate{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between}
+.gate p{margin:0;max-width:62ch;font-weight:500}
+.gate small{display:block;color:var(--mu);font-weight:400;margin-top:2px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;align-items:start}
+.stack{display:grid;gap:16px}
+fieldset{border:0;margin:0;min-width:0;padding:0}
+fieldset:disabled .ctl{opacity:.45}
+.ang{display:flex;align-items:baseline;justify-content:space-between}
+.ang b{font:600 36px var(--din);font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:44px;background:transparent;margin:2px 0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:4px;background:rgba(19,32,45,.15)}
+input[type=range]::-moz-range-track{height:8px;border-radius:4px;background:rgba(19,32,45,.15)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:28px;height:28px;margin-top:-10px;border-radius:50%;background:#fff;box-shadow:inset 0 0 0 3px var(--act),0 3px 8px rgba(13,25,45,.3)}
+input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid var(--act);box-shadow:0 3px 8px rgba(13,25,45,.3)}
+input[type=range]:disabled{cursor:not-allowed}
+.help{font-size:14px;color:var(--mu);margin:0 0 10px}
+.bar2{display:flex;flex-wrap:wrap;gap:8px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:52px;padding:6px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.row .l{display:flex;align-items:center;gap:12px;cursor:pointer}
+.sws{-webkit-appearance:none;appearance:none;width:52px;height:30px;border-radius:15px;background:rgba(19,32,45,.22);position:relative;cursor:pointer;flex:none;margin:0;transition:background-color .2s ease-out}
+.sws::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.25);transition:left .2s cubic-bezier(.16,1,.3,1)}
+.sws:checked{background:var(--act)}.sws:checked::after{left:25px}
+.sws:disabled{cursor:not-allowed}
+.ret{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--mu);text-align:right}
+.big{font:600 34px var(--din);font-variant-numeric:tabular-nums}
+.meter{height:12px;border-radius:6px;background:rgba(19,32,45,.12);position:relative;margin:10px 0 6px}
+.meter i{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:var(--act);transition:width .2s linear}
+.meter u{position:absolute;top:-6px;bottom:-6px;width:3px;border-radius:2px;background:var(--r)}
+.vals{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px;font-size:14px;color:var(--mu)}
+.vals b{display:block;font:600 20px var(--din);color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* Calibración */
+.cal{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;margin-top:16px}
+.cal .row input[type=number]{width:104px;min-height:42px;padding:0 10px;border:0;border-radius:10px;background:rgba(255,255,255,.8);box-shadow:inset 0 0 0 1px var(--line);text-align:right;font-variant-numeric:tabular-nums}
+.cal .row input[aria-invalid=true]{box-shadow:inset 0 0 0 2px var(--r)}
+.cal .r{display:flex;gap:8px;align-items:center}
+.cal .lbl{display:flex;flex-direction:column}
+.cal .u{font-size:13px;color:var(--mu)}
+.st-msg{font-size:13px;font-weight:600}
+.st-msg:empty{display:none}
+.st-msg.ok{color:var(--go)}.st-msg.bad{color:#A8261B}.st-msg.wait{color:var(--mu)}
+.radio{display:flex;gap:4px;padding:4px;border-radius:12px;background:rgba(19,32,45,.07)}
+.radio label{position:relative}
+.radio input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.radio span{display:flex;align-items:center;min-height:38px;padding:0 12px;border-radius:9px;font-size:14px;font-weight:600;color:var(--mu)}
+.radio input:checked+span{background:#fff;color:var(--ink);box-shadow:0 2px 8px -2px rgba(28,48,92,.3)}
+.radio input:focus-visible+span{outline:3px solid var(--act);outline-offset:1px}
+.wide{grid-column:1/-1}
+#calf:disabled .pane{opacity:.6}
+
+@media(max-width:980px){.auto{grid-template-columns:1fr}.seq{order:2}}
+@media(max-width:760px){
+ .bar{top:8px;margin-top:8px;width:calc(100% - 16px);padding:10px 10px 10px 16px}
+ .bar h1{font-size:19px}.seg{order:3;width:100%}.seg button{flex:1;padding:0 8px}
+ main,.top{padding-left:8px;padding-right:8px}
+ .two,.cal{grid-template-columns:1fr}
+ .status{grid-template-columns:1fr;padding:18px 18px 20px}
+ /* backdrop-filter crea un bloque contenedor y atraparía la barra fija de acciones */
+ .status.glass{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(255,255,255,.82)}
+ .status.err.glass{background:rgba(255,236,206,.92)}.status.paro.glass{background:rgba(255,224,218,.94)}
+ .mach figure:last-of-type svg{max-width:150px!important}
+ #a .acts{position:fixed;left:12px;right:12px;bottom:12px;z-index:8;justify-content:stretch;padding:8px;border-radius:18px;background:rgba(255,255,255,.7);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);box-shadow:var(--sh)}
+ #a .acts .btn{flex:1}
+ main{padding-bottom:110px}
+ .mach{grid-template-columns:1fr}
+ .cnt{grid-template-columns:repeat(2,1fr)}
+ .cal .row{flex-wrap:wrap}
+}
+@media(prefers-reduced-motion:reduce){*,*::after{transition:none!important;animation:none!important}
+ .status.err,.status.paro,.note.warn{animation:halo 1.6s ease-in-out infinite!important}
+ .status.err #st,.status.paro #st,#secw,.st-msg.bad{animation:txh 1.6s ease-in-out infinite!important}
+ .status.paro,.status.paro #st{animation-duration:1s!important}
+ body.s-err::before{animation:mrc 1.6s ease-in-out infinite!important}body.s-paro::before{animation:mrc 1s ease-in-out infinite!important}
+ body.s-paro #amb::after{animation:roj 1s ease-in-out infinite!important}}
+</style></head><body>
+<div id="amb" aria-hidden="true"><i class="o1"></i><i class="o2"></i><i class="o3"></i><i class="op" id="op"></i></div>
+
+<header class="bar glass">
+ <h1>Clasificador de color</h1>
+ <nav class="seg" role="tablist" aria-label="Vistas">
+  <button role="tab" aria-selected="true" aria-controls="a" id="ta">Automático</button>
+  <button role="tab" aria-selected="false" aria-controls="m" id="tm" tabindex="-1">Manual</button>
+  <button role="tab" aria-selected="false" aria-controls="k" id="tk" tabindex="-1">Calibración</button>
+ </nav>
+ <div class="chips"><span class="chip"><i class="dot" id="lm"></i><span id="md">Sin datos</span></span><span class="chip"><i class="dot" id="lc"></i><span id="cx">Conectando</span></span></div>
+</header>
+
+<div class="top">
+ <div class="note glass warn" id="off" role="status" hidden>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7A4100" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 13 0M9 15.5a5 5 0 0 1 6 0M3 3l18 18"/></svg>
+  <span id="offt"></span>
+ </div>
+ <div class="note glass warn" id="sens" hidden>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7A4100" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20Z"/><path d="M12 10v4M12 17v.5" stroke-linecap="round"/></svg>
+  <span id="senst"></span>
+ </div>
+ <div class="sr" role="alert" id="alr"></div>
+</div>
+
+<main>
+<section role="tabpanel" id="a" aria-labelledby="ta">
+ <div class="glass status" id="stp">
+  <div>
+   <div class="hl">
+    <svg id="ic" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" hidden><path id="icp"/><path d="M12 8v5M12 16.5v.5"/></svg>
+    <h2 id="st" aria-live="polite">Conectando con la tarjeta</h2>
+   </div>
+   <p id="wt"></p>
+   <p id="ms" class="mu"></p>
+   <div class="tb" id="tb" hidden><i id="tbi"></i></div>
+   <p id="why" class="mu"></p>
+   <div class="segs" id="segs" aria-hidden="true"></div>
+  </div>
+  <div class="acts">
+   <button class="btn go" id="bgo" hidden onclick="tx('auto')">Iniciar ciclo</button>
+   <button class="btn stop" id="bst" hidden onclick="tx('stop')">Detener</button>
+   <button class="btn rst" id="brs" hidden onclick="tx('reset')">Reiniciar</button>
+  </div>
+ </div>
+ <div class="auto">
+  <div class="glass pane seq">
+   <h3>Secuencia del ciclo</h3>
+   <svg id="gf" viewBox="0 0 340 494" role="img" aria-label="Secuencia del ciclo automático"></svg>
+  </div>
+  <div class="col">
+   <div class="glass pane mach">
+    <figure class="carf">
+     <svg viewBox="-4 0 228 140" width="100%" role="img" aria-label="Posición del carrusel" id="car">
+      <defs>
+       <linearGradient id="gv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5BD794"/><stop offset="1" stop-color="#11803F"/></linearGradient>
+       <linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD866"/><stop offset="1" stop-color="#C98A00"/></linearGradient>
+       <linearGradient id="gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF8A7A"/><stop offset="1" stop-color="#B92E22"/></linearGradient>
+       <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".6"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/></linearGradient>
+       <linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#C3CEE0"/></linearGradient>
+       <radialGradient id="hubg" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#D2DBEA"/></radialGradient>
+       <filter id="fsh" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#1C305C" flood-opacity=".3"/></filter>
+      </defs>
+      <path d="M-0.5 115A110.5 110.5 0 0 1 220.5 115" fill="none" stroke="rgba(19,32,45,.14)"/>
+      <path d="M5 115A105 105 0 0 1 215 115" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="9"/>
+      <rect x="-1" y="115" width="222" height="7" rx="3.5" fill="rgba(255,255,255,.75)" stroke="rgba(19,32,45,.12)"/>
+      <g stroke="rgba(255,255,255,.95)" stroke-width="2.5" stroke-linejoin="round"><path class="sec" id="q0" fill="#B9C3D0" d="M110 115L10 115A100 100 0 0 1 60 28.4Z"/><path class="sec" id="q1" fill="#B9C3D0" d="M110 115L60 28.4A100 100 0 0 1 160 28.4Z"/><path class="sec" id="q2" fill="#B9C3D0" d="M110 115L160 28.4A100 100 0 0 1 210 115Z"/></g>
+      <path d="M10 115A100 100 0 0 1 210 115Z" fill="url(#sheen)"/>
+      <path d="M74 115A36 36 0 0 1 146 115Z" fill="rgba(255,255,255,.55)" stroke="rgba(255,255,255,.95)" stroke-width="1.5"/>
+      <g stroke="rgba(19,32,45,.4)" stroke-width="1.5" stroke-linecap="round"><path d="M59.5 27.5L54.5 18.9M160.5 27.5L165.5 18.9"/></g>
+      <line id="rj" x1="110" y1="115" x2="10" y2="115" stroke="#13202D" stroke-width="1.6" stroke-dasharray="3 3"/>
+      <text id="rjt" x="22" y="134" font-size="9" font-weight="600" fill="#435366" text-anchor="middle">Rechazo</text>
+      <g font-size="10" font-weight="700" text-anchor="middle" font-family="system-ui,sans-serif" fill="#13202D">
+       <g id="c0"><rect y="68" height="17" rx="8.5" fill="rgba(255,255,255,.85)" filter="url(#fsh)"/><text x="40" y="80"></text></g>
+       <g id="c1"><rect y="33" height="17" rx="8.5" fill="rgba(255,255,255,.85)" filter="url(#fsh)"/><text x="110" y="45"></text></g>
+       <g id="c2"><rect y="68" height="17" rx="8.5" fill="rgba(255,255,255,.85)" filter="url(#fsh)"/><text x="180" y="80"></text></g>
+      </g>
+      <g id="ndg"><path d="M110 110.6L48 115L110 119.4Z" fill="#13202D"/><path d="M108 113L56 115" stroke="rgba(255,255,255,.55)" stroke-width="1.2"/></g>
+      <circle cx="110" cy="115" r="11.5" fill="url(#hubg)" stroke="rgba(19,32,45,.22)" filter="url(#fsh)"/><circle cx="110" cy="115" r="4" style="fill:var(--act)"/>
+     </svg>
+     <figcaption>Carrusel a <span id="ca1">0</span>°</figcaption>
+    </figure>
+    <figure>
+     <svg viewBox="0 0 140 92" width="100%" style="max-width:220px" role="img" aria-label="Inclinación de la charola">
+      <rect x="4" y="76" width="132" height="6" rx="3" fill="rgba(255,255,255,.75)" stroke="rgba(19,32,45,.12)"/>
+      <g id="tray">
+       <circle id="tpz" cx="92" cy="51" r="8" fill="#B9C3D0" stroke="#fff" stroke-width="2" opacity="0" filter="url(#fsh)"/>
+       <rect x="16" y="60" width="112" height="12" rx="6" fill="url(#tg)" stroke="rgba(19,32,45,.22)" filter="url(#fsh)"/>
+       <rect x="28" y="62.5" width="76" height="2" rx="1" fill="#fff"/>
+      </g>
+      <circle cx="22" cy="66" r="7.5" fill="url(#hubg)" stroke="rgba(19,32,45,.25)" filter="url(#fsh)"/>
+     </svg>
+     <figcaption>Charola a <span id="ca2">0</span>°</figcaption>
+    </figure>
+    <div class="pz"><div class="sw" id="sw"></div><div><div class="d" id="cn">Sin pieza</div><div class="mu" id="pd"></div></div></div>
+   </div>
+   <div class="glass pane">
+    <div class="cnt-h"><h3>Piezas clasificadas</h3><span>Total <b class="d" id="tot">0</b></span></div>
+    <div class="mix" id="mix" aria-hidden="true"></div>
+    <div class="cnt" id="cnt"></div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<section role="tabpanel" id="m" aria-labelledby="tm" hidden>
+ <div class="glass pane gate"><p id="mgt"></p><button class="btn" id="mgb"></button></div>
+ <div class="two">
+  <div class="stack">
+   <fieldset class="glass pane act" disabled>
+    <h3>Servo 1, carrusel</h3>
+    <div class="ctl">
+     <div class="ang"><span class="mu">Ángulo</span><b><span id="v1">0</span>°</b></div>
+     <input type="range" min="0" max="180" id="s1" aria-label="Ángulo del servo 1" oninput="sl(1,this.value)" onchange="mv(1,this.value)">
+     <p class="help">El servo se mueve al soltar el control.</p>
+     <div class="bar2" id="p1"></div>
+    </div>
+   </fieldset>
+   <fieldset class="glass pane act" disabled>
+    <h3>Servo 2, charola</h3>
+    <div class="ctl">
+     <div class="ang"><span class="mu">Ángulo</span><b><span id="v2">0</span>°</b></div>
+     <input type="range" min="0" max="180" id="s2" aria-label="Ángulo del servo 2" oninput="sl(2,this.value)" onchange="mv(2,this.value)">
+     <p class="help">El servo se mueve al soltar el control.</p>
+     <div class="bar2"><button class="btn sm ghost" onclick="pre(2,cfg.s2rep)">Reposo</button><button class="btn sm ghost" onclick="pre(2,cfg.s2up)">Inclinada</button></div>
+    </div>
+   </fieldset>
+   <fieldset class="glass pane act" disabled>
+    <h3>Relevadores hacia el PLC</h3>
+    <div class="ctl" id="rl"></div>
+   </fieldset>
+   <fieldset class="glass pane act" disabled>
+    <h3>LED RGB de la tarjeta</h3>
+    <div class="ctl">
+     <div class="ledrow"><div class="sw" id="lsw"></div><div><b class="d" id="lnow">Sin datos</b><div class="mu" id="lmean"></div></div></div>
+     <p class="help">En modo manual puedes probar colores y efectos. Al salir del modo manual el LED vuelve a indicar el estado de la máquina; ese significado es fijo.</p>
+     <div class="row"><label for="lcol">Color de prueba</label><input type="color" id="lcol" value="#2b57e0" oninput="led()"></div>
+     <div class="row"><span>Efecto</span><span class="radio" role="radiogroup" aria-label="Efecto del LED"><label><input type="radio" name="lfx" value="0" checked onchange="led()"><span>Fijo</span></label><label><input type="radio" name="lfx" value="1" onchange="led()"><span>Respirar</span></label><label><input type="radio" name="lfx" value="2" onchange="led()"><span>Parpadeo</span></label><label><input type="radio" name="lfx" value="3" onchange="led()"><span>Arcoíris</span></label></span></div>
+     <div class="bar2"><button class="btn sm ghost" onclick="tx('led:auto')">Volver al indicador de estado</button></div>
+    </div>
+   </fieldset>
+  </div>
+  <div class="stack">
+   <div class="glass pane">
+    <h3>Sensor de color</h3>
+    <div style="display:flex;gap:14px;align-items:center"><div class="sw" id="msw"></div><div><div class="big" id="mcn">Sin lectura</div><div class="mu" id="mhs"></div></div></div>
+    <div class="vals" id="rgb"></div>
+   </div>
+   <div class="glass pane">
+    <h3>Sensor de distancia</h3>
+    <div class="big"><span id="mdd">0</span> mm</div>
+    <div class="meter" aria-hidden="true"><i id="mbar"></i><u id="mthr"></u></div>
+    <div class="mu" id="mpz"></div>
+   </div>
+   <div class="glass pane">
+    <h3>Seguridad y conexiones</h3>
+    <div class="row"><span>Línea de paro</span><span class="ret"><i class="dot" id="lp"></i><span id="tp"></span></span></div>
+    <div class="row"><span>Sensor de color TCS34725</span><span class="ret"><i class="dot" id="li0"></i><span id="ti0"></span></span></div>
+    <div class="row"><span>Sensor de distancia VL53L0X</span><span class="ret"><i class="dot" id="li1"></i><span id="ti1"></span></span></div>
+   </div>
+   <div class="glass pane">
+    <h3>Qué indica el LED de la tarjeta</h3>
+    <ul class="leg" id="leg"></ul>
+   </div>
+  </div>
+ </div>
+</section>
+
+<section role="tabpanel" id="k" aria-labelledby="tk" hidden>
+ <div class="glass pane gate"><p id="klk"></p></div>
+ <fieldset id="calf" class="cal"></fieldset>
+ <div class="glass pane gate" style="margin-top:16px"><p>Reiniciar la tarjeta<small>Reinicia el programa de la ESP32. Los parámetros y los contadores se conservan, y la página se reconecta sola en unos segundos. No está disponible con el ciclo automático corriendo.</small></p><button type="button" class="btn sm ghost" id="rbt" onclick="reboot()">Reiniciar la tarjeta</button></div>
+ <div class="glass pane gate" style="margin-top:16px"><p>Restablecer valores de fábrica<small>Vuelve todos los parámetros de calibración a sus valores originales y pone los contadores en cero. Los servos regresan a reposo, los relevadores se apagan y la máquina queda detenida. Solo con la máquina detenida o en manual. <b id="dfm" role="status"></b></small></p><button type="button" class="btn sm ghost" id="dft" onclick="defaults()">Restablecer valores</button></div>
+</section>
+</main>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const N=['Verde','Amarillo','Rojo'],CV=['var(--g)','var(--y)','var(--r)'],SK=['secV','secA','secR'],cfg={},pend={};
+const G=[['Detenido','Iniciar ciclo'],['Espera de pieza','pieza detectada y quieta'],['Leyendo color','color medido'],['Moviendo carrusel','carrusel asentado'],['Confirmando con el PLC','retorno correcto del PLC'],['Levantando charola','charola inclinada'],['Esperando caída','tiempo de caída cumplido'],['Verificando charola','charola vacía'],['Liberando el PLC','señales liberadas']];
+const GM={0:0,2:1,3:1,4:2,5:3,6:4,7:5,8:6,9:7,10:8},LIM={3:'tasent',4:'teco',6:'tcaida'};
+const HELP={'Error de comunicación con el PLC':'Revisa las señales entre los relevadores y el PLC (I1 a I3 y Q1 a Q3). Si el PLC no está conectado, apaga «Usar PLC» en Calibración.','Pieza atorada en la charola':'Retira la pieza de la charola y revisa que nada la detenga.','El PLC no liberó las señales':'Revisa que el PLC apague sus salidas Q1 a Q3.',
+ 'Sin lectura del sensor de distancia':'Revisa el cable del VL53L0X (I2C 1: GPIO 11 y 12) y que nada tape el sensor. Si sigue fallando, reinicia la tarjeta.',
+ 'Sin lectura del sensor de color':'Revisa el cable del TCS34725 (I2C 0: GPIO 8 y 9). Si sigue fallando, reinicia la tarjeta.'};
+const PS={s1min:['Límite mínimo','°',0,180,1],s1max:['Límite máximo','°',0,180,1],rej:['Posición de rechazo','°',0,180,1],v1:['Velocidad','°/s',10,360,1],tasent:['Asentamiento','ms',0,5000,50],
+ s2rep:['Reposo','°',0,180,1],s2up:['Inclinada','°',0,180,1],s2wig:['Sacudida','°',0,20,1],v2:['Velocidad','°/s',10,360,1],tcaida:['Tiempo de caída','ms',100,10000,100],
+ base:['Distancia a la charola vacía','mm',20,2000,1],delta:['Umbral de detección','mm',2,200,1],tstab:['Estabilización','ms',0,5000,50],
+ hV:['Tono del verde','°',0,359,1],hA:['Tono del amarillo','°',0,359,1],hR:['Tono del rojo','°',0,359,1],tol:['Tolerancia de tono','°',1,90,1],satmin:['Saturación mínima','0 a 1',0,1,.01],
+ teco:['Espera del retorno del PLC','ms',100,10000,100],secV:['','',0,2,1],secA:['','',0,2,1],secR:['','',0,2,1],plc:['','',0,1,1]};
+const GR=[['Carrusel (servo 1)',['s1min','s1max','rej','v1','tasent']],['Charola (servo 2)',['s2rep','s2up','s2wig','v2','tcaida']],['Detección de pieza',['base','delta','tstab']],['Color',['hV','hA','hR','tol','satmin']]];
+const CAP={base:'calvacia',hV:'calcolor:0',hA:'calcolor:1',hR:'calcolor:2'};
+let ws,sim=null,D=null,lastMsg=0,isOff=null,alrT='';
+const tx=m=>{if(sim)sim.cmd(m);else if(ws&&ws.readyState==1)ws.send(m)};
+const fmt=ms=>(ms/1000).toFixed(1).replace('.',',')+' s';
+
+// Pestañas
+const tabs=$$('[role=tab]');
+function tab(t){tabs.forEach(b=>{const on=b==t;b.setAttribute('aria-selected',on);b.tabIndex=on?0:-1;$('#'+b.getAttribute('aria-controls')).hidden=!on})}
+tabs.forEach((b,i)=>{b.onclick=()=>tab(b);b.onkeydown=e=>{const k={ArrowRight:i+1,ArrowLeft:i+2,Home:0,End:2}[e.key];if(k!=null){const n=tabs[k%3];tab(n);n.focus();e.preventDefault()}}});
+
+// Grafcet y franja de etapas
+(()=>{let s='',H=53;G.forEach((g,i)=>{const y=10+i*H;  // paso compacto: las 9 etapas caben en una pantalla de 900 px
+ s+=`<g class="stp" id="g${i}"><rect x="40" y="${y}" width="42" height="33" rx="3"/>${i?'':`<rect class="in" x="44" y="${y+4}" width="34" height="25" rx="1"/>`}<text class="n" x="61" y="${y+21}" text-anchor="middle">${i}</text><circle class="tk" cx="61" cy="${y+28}" r="2.4"/><text class="lb" x="96" y="${y+22}">${g[0]}</text></g>`+
+ `<line class="ln" x1="61" y1="${y+33}" x2="61" y2="${y+(i<8?H:51)}"/><line class="tr" id="tr${i}" x1="50" y1="${y+43}" x2="72" y2="${y+43}"/><text class="cd" id="cd${i}" x="80" y="${y+47}">${g[1]}</text>`});
+ s+=`<path class="ln" d="M61 485H16V58H55"/><path d="M54 54l7 4-7 4z" fill="#13202D"/>`;$('#gf').innerHTML=s;
+ $('#segs').innerHTML=G.map(()=>'<i></i>').join('')})();
+
+// Manual
+$('#rl').innerHTML=['Verde','Amarillo','Rojo','Falla'].map((n,i)=>`<div class="row"><label class="l"><input type="checkbox" role="switch" class="sws" id="r${i}" onchange="tx('rele:${i}:'+(this.checked?1:0))">${n} <span class="mu">(I${i+1})</span></label>${i<3?`<span class="ret"><i class="dot" id="q${i}l"></i><span id="q${i}t">Retorno Q${i+1}</span></span>`:'<span class="ret">Avisa la falla al PLC</span>'}</div>`).join('');
+$('#p1').innerHTML=`<button class="btn sm ghost" onclick="pre(1,cfg.rej)">Rechazo</button>`+N.map((n,c)=>`<button class="btn sm ghost" onclick="pre(1,sec(${c}))">${n}</button>`).join('');
+const sec=c=>Math.round(cfg.s1min+((cfg[SK[c]]|0)+.5)*(cfg.s1max-cfg.s1min)/3);
+let tS=0;
+function sl(n,v){$('#v'+n).textContent=v;tS=Date.now()}
+function mv(n,v){sl(n,v);tx('m'+n+':'+v)}
+function pre(n,v){if(v==null)return;$('#s'+n).value=v;mv(n,v)}
+
+// LED de la tarjeta: leyenda fija (no configurable) y juego del modo manual
+const LEG=[['#2B57E0','br','Azul respirando: servidor web encendido, nadie conectado a la página'],['#2B57E0','','Azul fijo: máquina detenida, página conectada'],
+ ['#16924C','br','Verde respirando: ciclo automático, esperando o leyendo una pieza'],['#D99A00','','Verde, ámbar o rojo fijo: la pieza va a su sector','conic-gradient(#16924C 0 33%,#D99A00 0 66%,#D2392B 0)'],
+ ['#C9D2DE','','Blanco: la pieza no se reconoció y va al rechazo'],['#1FB5B5','','Cian: modo manual (aquí puedes probar otros colores)'],
+ ['#E08A00','bl','Ámbar parpadeando: falla del proceso'],['#D2392B','fa','Rojo parpadeando rápido: paro de emergencia'],
+ ['#B23AB2','bl','Magenta parpadeando: falta un sensor'],['#B23AB2','alt','Magenta y rojo alternando: no se pudo iniciar la red Wi-Fi'],['#C9D2DE','','Blanco tenue: la tarjeta está arrancando']];
+$('#leg').innerHTML=LEG.map(l=>`<li><i class="${l[1]}" style="--c:${l[0]}${l[3]?';--b:'+l[3]:''}"></i><span>${l[2]}</span></li>`).join('');
+let tL=0,pL;
+function led(){clearTimeout(pL);const go=()=>{tL=Date.now();const c=$('#lcol').value,fx=$('input[name=lfx]:checked').value;
+ tx(`led:${parseInt(c.slice(1,3),16)},${parseInt(c.slice(3,5),16)},${parseInt(c.slice(5,7),16)},${fx}`)};Date.now()-tL>150?go():pL=setTimeout(go,150)}
+function ledInfo(d){const si=d.si;if(si==12)return['Rojo parpadeando','Paro de emergencia'];if(si==11)return['Ámbar parpadeando','Falla del proceso'];if(d.ok!=3)return['Magenta parpadeando','Falta un sensor'];
+ if(si==1)return (d.lc||'')!=='001E1E'?['Tu color de prueba','Modo manual: el LED muestra lo que eliges aquí']:['Cian','Modo manual'];if(si==0)return['Azul','Detenido, página conectada'];
+ if(si<=4)return['Verde respirando','Ciclo automático: esperando o leyendo pieza'];return d.col>=0?[N[d.col],'La pieza va a su sector']:['Blanco','La pieza va al rechazo']}
+function ledHex(h){const v=[0,2,4].map(i=>parseInt((h||'000000').slice(i,i+2),16)),m=Math.max(...v);return m?'rgb('+v.map(x=>Math.round(x*255/m)).join(',')+')':'#2A3340'}
+
+// Calibración
+function row(k){const p=PS[k];return `<div class="row"><label class="lbl" for="k_${k}">${p[0]}${p[1]?` (${p[1]})`:''}<span class="st-msg" id="m_${k}" aria-live="polite"></span></label><span class="r">${CAP[k]?`<button type="button" class="btn sm ghost" onclick="tx('${CAP[k]}')">Capturar</button>`:''}<input type="number" id="k_${k}" min="${p[2]}" max="${p[3]}" step="${p[4]}" onchange="setP('${k}',this.value)"></span></div>`}
+const card=(t,b)=>`<div class="glass pane"><h3>${t}</h3>${b}</div>`,grp=i=>card(GR[i][0],GR[i][1].map(row).join(''));
+$('#calf').innerHTML=
+ // dos columnas de altura parecida: carrusel, sectores, detección | modo, charola, color
+ `<div class="stack">${grp(0)}`+card('Sector de cada color en el carrusel',N.map((n,c)=>`<div class="row"><span>${n}<span class="st-msg" id="m_${SK[c]}" aria-live="polite" style="display:block"></span></span><span class="radio" role="radiogroup" aria-label="Sector del ${n.toLowerCase()}">${['Izquierda','Centro','Derecha'].map((t,j)=>`<label><input type="radio" name="${SK[c]}" value="${j}" onchange="setP('${SK[c]}',${j})"><span>${t}</span></label>`).join('')}</span></div>`).join('')+'<p class="st-msg bad" id="secw"></p>')+`${grp(2)}</div>`+
+ `<div class="stack">`+card('Modo de operación',`<div class="row"><label class="l" for="k_plc"><input type="checkbox" role="switch" class="sws" id="k_plc" onchange="setP('plc',this.checked?1:0)"><span>Usar PLC<span class="u" style="display:block">Apágalo para probar la máquina sin el PLC conectado (modo banco).</span></span></label><span class="st-msg" id="m_plc" aria-live="polite"></span></div><div class="row"><span>Espera del retorno del PLC (ms)<span class="st-msg" id="m_teco" aria-live="polite" style="display:block"></span></span><span class="r"><input type="number" id="k_teco" min="100" max="10000" step="100" aria-label="Espera del retorno del PLC" onchange="setP('teco',this.value)"></span></div>`)+`${grp(1)}${grp(3)}</div>`;
+function chk(k,v){const p=PS[k];if(isNaN(v)||v<p[2]||v>p[3])return `Usa un valor entre ${p[2]} y ${p[3]}`;
+ if(k=='s1min'&&v>=cfg.s1max)return 'Debe ser menor que el límite máximo';if(k=='s1max'&&v<=cfg.s1min)return 'Debe ser mayor que el límite mínimo';return ''}
+function msg(k,t,c){const m=$('#m_'+k);if(!m)return;m.textContent=t;m.className='st-msg '+(c||'');clearTimeout(m._t);if(c=='ok')m._t=setTimeout(()=>{m.textContent=''},2500)}
+function setP(k,v){v=+v;const e=chk(k,v),i=$('#k_'+k);if(i&&i.type=='number')i.setAttribute('aria-invalid',!!e);
+ if(e){msg(k,e,'bad');return}pend[k]=v;msg(k,'Guardando…','wait');tx(`set:${k}=${v}`);
+ setTimeout(()=>{if(k in pend){delete pend[k];msg(k,'No se guardó. Revisa la conexión.','bad')}},2500)}
+
+function dot(id,c){const e=$(id);e.className='dot'+(c?' '+c:'')}
+function offline(on,age){if(on!==isOff){isOff=on;document.body.classList.toggle('offline',on);$('main').inert=on;$('#off').hidden=!on;dot('#lc',on?'bad':sim?'sim':'go');$('#cx').textContent=on?'Sin conexión':sim?'Simulación':'Conectado'}
+ if(on)$('#offt').textContent=rebooting?'Reiniciando la tarjeta… La página se reconecta sola en unos segundos.':`Sin conexión con la tarjeta. Los datos en pantalla son de hace ${Math.round(age/1000)} s. Reintentando…`}
+setInterval(()=>{if(lastMsg){const a=Date.now()-lastMsg;if(a>2500||rebooting)offline(true,a)}},1000);
+
+// Reiniciar y restablecer: dos pasos para no hacerlo por accidente
+let rebooting=0,dftP=0;const T2={};
+function c2Reset(id){const b=$('#'+id);clearTimeout(T2[id]);if(!b.dataset.ok)return;delete b.dataset.ok;b.textContent=b.dataset.l;b.className='btn sm ghost'}
+function c2(id,txt){const b=$('#'+id);if(b.dataset.ok){c2Reset(id);return true}
+ b.dataset.l=b.textContent;b.dataset.ok=1;b.textContent=txt;b.className='btn sm stop';T2[id]=setTimeout(()=>c2Reset(id),4000);return false}
+function reboot(){if(!c2('rbt','Confirmar reinicio'))return;rebooting=Date.now();tx('reboot');offline(true,0)}
+function defaults(){if(!c2('dft','Confirmar: borrar ajustes'))return;dftP=1;$('#dfm').textContent='';tx('defaults')}
+
+function ver(d){
+ if(rebooting){if(Date.now()-rebooting<1500)return;rebooting=0}  // ignora el último estado antes de reiniciar
+ D=d;lastMsg=Date.now();offline(false);
+ const si=d.si,err=si==11,paro=si==12,flt=err||paro,man=si==1,stop=si==0,run=!flt&&!man&&!stop,g=GM[si],fg=flt&&d.fs>=0?GM[d.fs]:null,ok=d.ok==3;
+ const b=document.body;b.classList.toggle('s-err',err);b.classList.toggle('s-paro',paro);
+ // encabezado
+ $('#md').textContent=paro?'Paro de emergencia':err?'Falla':man?'Modo manual':stop?'Detenido':'Ciclo automático';
+ dot('#lm',paro?'bad':err?'err':man?'man':stop?'':'go');
+ // sensores faltantes
+ const miss=[d.ok&1?'':'el sensor de color',d.ok&2?'':'el sensor de distancia'].filter(Boolean);
+ $('#sens').hidden=ok;if(!ok)$('#senst').textContent=`Falta ${miss.join(' y ')}. Revisa el cableado I2C y reinicia la tarjeta; el ciclo automático no puede iniciar.`;
+ // estado
+ const sp=$('#stp');sp.classList.toggle('err',err);sp.classList.toggle('paro',paro);
+ const ic=$('#ic');ic.toggleAttribute('hidden',!flt);  // SVG no tiene la propiedad .hidden
+ if(flt){ic.setAttribute('stroke',paro?'#9C1F15':'#7A4100');$('#icp').setAttribute('d',paro?'M8 2h8l6 6v8l-6 6H8l-6-6V8z':'M12 3 2 20h20Z')}
+ let st,wt='',why='',bar=0;
+ const held=paro&&cfg.plc>.5&&!d.ret[3];
+ if(paro){st='Paro de emergencia';wt=fg!=null?`La máquina se detuvo en la etapa ${fg}: ${G[fg][0]}.`:'La máquina se detuvo.';why=held?'El botón de paro sigue activado. Libéralo para poder reiniciar. Si el PLC no está conectado, apaga «Usar PLC» en Calibración.':'El botón de paro ya está liberado. Presiona Reiniciar.'}
+ else if(err){st=fg!=null?`Falla en la etapa ${fg}`:'Falla';wt=d.msg+'.';why=(HELP[d.msg]||'Corrige la causa.')+' Después presiona Reiniciar.'}
+ else if(man){st='Modo manual';wt='El ciclo está en pausa.';why='Prueba cada componente en la pestaña Manual. Para volver al ciclo, sal del modo manual.'}
+ else if(stop){st='0 · Detenido';wt=ok?'Listo para iniciar.':'No se puede iniciar el ciclo.';why=ok?'Coloca una pieza en la charola después de iniciar.':'Iniciar ciclo se habilita cuando ambos sensores respondan.'}
+ else{st=`${g} · ${G[g][0]}`;const lim=LIM[g]?cfg[LIM[g]]:0;
+  wt=`Espera: ${G[g][1]}`+(g==1?(d.pz?', pieza detectada':''):` <b>${fmt(d.te||0)}${lim?' de '+fmt(lim):''}</b>`);
+  if(lim){bar=Math.min(100,(d.te||0)/lim*100)}}
+ $('#st').textContent=st;$('#wt').innerHTML=wt;$('#why').textContent=why;
+ $('#ms').textContent=run&&(g==3||g==5)?d.msg:'';
+ $('#tb').hidden=!bar;$('#tbi').style.width=bar+'%';
+ const at=flt?`${st}. ${wt} ${why}`:'';if(at!==alrT){alrT=at;$('#alr').textContent=at}
+ // franja y Grafcet
+ $$('#segs i').forEach((e,i)=>{e.className=(run||stop)&&g===i?'on':run&&i>=1&&i<g?'done':flt&&fg===i?'flt':''});
+ $('#gf').classList.toggle('paro',paro);
+ G.forEach((_,i)=>{const e=$('#g'+i);e.classList.toggle('on',run&&g===i||stop&&i===0);e.classList.toggle('done',run&&i>=1&&i<g);e.classList.toggle('flt',flt&&fg===i);
+  const on=(run||stop)&&g===i;$('#tr'+i).classList.toggle('on',on);$('#cd'+i).classList.toggle('on',on)});
+ $('#gf').setAttribute('aria-label',flt?`Secuencia detenida en la etapa ${fg??''}`:man?'Secuencia en pausa':`Secuencia en la etapa ${g}, ${G[g][0]}`);
+ // acciones
+ $('#bgo').hidden=!(stop||man);$('#bgo').disabled=!ok;$('#bst').hidden=!run;$('#brs').hidden=!flt;$('#brs').disabled=held;
+ // máquina
+ const lo=cfg.s1min??0,hi=cfg.s1max??180,ang=v=>Math.max(-8,Math.min(188,(v-lo)/(hi-lo)*180))*Math.PI/180,t=ang(d.a1);
+ const deg=t*180/Math.PI,si3=Math.max(0,Math.min(2,Math.floor(deg/60))),near=Math.abs(deg-(si3*60+30))<22;
+ $('#ndg').style.transform=`rotate(${deg}deg)`;  // aguja corta: no tapa las etiquetas de sector
+ $('#car').classList.toggle('lit',near);[0,1,2].forEach(i=>$('#q'+i).classList.toggle('on',near&&i===si3));
+ $('#ca1').textContent=Math.round(d.a1);$('#ca2').textContent=Math.round(d.a2);
+ $('#tray').style.transform=`rotate(${-Math.max(0,Math.min(80,d.a2-(cfg.s2rep??0)))}deg)`;
+ const hc=`hsl(${d.h},72%,46%)`,has=run&&d.col>=0&&g>=2,tp=$('#tpz');
+ $('#sw').style.setProperty('--pc',has?hc:'#B9C3D0');
+ tp.setAttribute('opacity',d.pz?1:0);tp.setAttribute('fill',has?hc:'#B9C3D0');
+ const li=ledInfo(d);$('#lsw').style.setProperty('--pc',ledHex(d.lc));$('#lnow').textContent=li[0];$('#lmean').textContent=li[1];
+ $('#cn').textContent=has?N[d.col]:run&&g>=3&&d.col<0?'Sin reconocer':'Sin pieza';
+ $('#pd').textContent=has?(g>=7?'Pieza enviada a su contenedor':`Tono ${d.h}°, saturación ${d.s}`):run&&g==1&&!d.pz?'Coloca una pieza en la charola':run&&g>=3?'Va al rechazo':'';
+ const op=$('#op');op.style.opacity=has?.7:0;if(has)op.style.backgroundColor=`hsl(${d.h},85%,62%)`;
+ $('#cnt').innerHTML=[...N,'Rechazadas'].map((n,i)=>`<div style="--c:${i<3?CV[i]:'#8A97A8'}"><b>${d.n[i]}</b><span>${n}</span></div>`).join('');
+ const tot=d.n.reduce((a,c)=>a+c,0);$('#tot').textContent=tot;
+ $('#mix').innerHTML=tot?d.n.map((v,i)=>`<i style="--c:${i<3?CV[i]:'#8A97A8'};flex-grow:${v}"></i>`).join(''):'';
+ // manual
+ $('#mgt').innerHTML=man?'Modo manual activo. Cada componente responde por separado.<small>Al salir, los servos vuelven a su posición de reposo.</small>':flt?'Hay una falla activa.<small>Reinicia el sistema desde la pestaña Automático antes de usar el modo manual.</small>':stop?'Los controles se habilitan en modo manual.<small>La máquina debe estar detenida.</small>':'El ciclo automático está corriendo.<small>Detenlo para poder entrar al modo manual.</small>';
+ const mb=$('#mgb');mb.textContent=man?'Salir del modo manual':'Entrar al modo manual';mb.className='btn '+(man?'stop':'rst');mb.disabled=!(man||stop);mb.onclick=()=>tx(man?'stop':'manual');
+ $$('fieldset.act').forEach(f=>f.disabled=!man);
+ [1,2].forEach(n=>{const s=$('#s'+n),v=Math.round(d['a'+n]);if(document.activeElement!==s&&Date.now()-tS>1500){s.value=v;$('#v'+n).textContent=v}});
+ d.rel.forEach((v,i)=>$('#r'+i).checked=!!v);
+ [0,1,2].forEach(i=>{dot(`#q${i}l`,d.ret[i]?'go':'');$(`#q${i}t`).textContent=`Retorno Q${i+1}: ${d.ret[i]?'activo':'inactivo'}`});
+ $('#msw').style.setProperty('--pc',d.pz&&d.col>=0?hc:d.pz?`hsl(${d.h},${Math.round(d.s*72)}%,50%)`:'#B9C3D0');
+ $('#mcn').textContent=d.pz?(d.col>=0?N[d.col]:'Sin reconocer'):'Sin pieza';$('#mhs').textContent=`Tono ${d.h}°, saturación ${d.s}`;
+ $('#rgb').innerHTML=[['Rojo',d.r],['Verde',d.g],['Azul',d.b],['Claro',d.c]].map(v=>`<div>${v[0]}<b>${v[1]}</b></div>`).join('');
+ const base=cfg.base||100,full=base*1.4;$('#mdd').textContent=Math.round(d.d);
+ $('#mbar').style.width=Math.min(100,d.d/full*100)+'%';$('#mthr').style.left=Math.min(100,(base-(cfg.delta||0))/full*100)+'%';
+ $('#mpz').textContent=d.pz?'Pieza detectada: la distancia está por debajo de la marca roja.':'Charola vacía.';
+ dot('#lp',d.ret[3]?'go':'bad');$('#tp').textContent=d.ret[3]?'Normal':(cfg.plc>.5?'Paro activo':'Sin señal (modo banco)');
+ [0,1].forEach(i=>{const o=d.ok>>i&1;dot('#li'+i,o?'go':'bad');$('#ti'+i).textContent=o?'Conectado':'No encontrado'});
+ // calibración
+ // calibrar se permite con la máquina parada, incluso en falla o paro (así se puede apagar «Usar PLC» si no hay PLC)
+ const free=stop||man;$('#calf').disabled=run;$('#rbt').disabled=run;$('#dft').disabled=!free;['rbt','dft'].forEach(id=>{if($('#'+id).disabled)c2Reset(id)});
+ $('#klk').innerHTML=run?'La calibración está bloqueada mientras el ciclo corre.<small>Detén la máquina para editar.</small>':(flt?'Hay una falla activa; la máquina está detenida y puedes ajustar la calibración.':'Los cambios se guardan en la tarjeta al salir de cada campo.')+'<small>Para capturar un tono, deja la pieza bajo el sensor; para la charola vacía, retírala.</small>';
+}
+
+function cfgver(v){
+ Object.assign(cfg,v);
+ if(dftP){dftP=0;for(const k in pend)delete pend[k];$('#dfm').textContent='Valores de fábrica restablecidos.'}
+ for(const k in v){if(k in pend&&Math.abs(pend[k]-v[k])<1e-6){delete pend[k];msg(k,'Guardado','ok')}
+  const i=$('#k_'+k);if(i&&document.activeElement!==i){if(i.type=='checkbox')i.checked=v[k]>.5;else{i.value=v[k];i.removeAttribute('aria-invalid')}}
+  if(SK.includes(k)){const r=$(`input[name=${k}][value="${v[k]|0}"]`);if(r)r.checked=true}}
+ const used=SK.map(k=>cfg[k]|0),dup=used.some((s,i)=>used.indexOf(s)!==i);
+ $('#secw').textContent=dup?'Dos colores comparten el mismo sector. Asigna un sector distinto a cada color.':'';
+ [0,1,2].forEach(c=>{const q=cfg[SK[c]]|0;$('#q'+q).setAttribute('fill',`url(#${['gv','ga','gr'][c]})`);
+  const g=$('#c'+q),tx_=g.querySelector('text'),r=g.querySelector('rect'),w=N[c].length*6.4+16;tx_.textContent=N[c];r.setAttribute('width',w);r.setAttribute('x',+tx_.getAttribute('x')-w/2)});
+ const t=Math.max(-8,Math.min(188,((cfg.rej-cfg.s1min)/(cfg.s1max-cfg.s1min))*180))*Math.PI/180,rx=110-100*Math.cos(t),ry=115-100*Math.sin(t);
+ $('#rj').setAttribute('x2',rx);$('#rj').setAttribute('y2',ry);$('#rjt').setAttribute('x',Math.max(20,Math.min(200,rx)));
+ if(D)ver(D);
+}
+
+function con(){
+ ws=new WebSocket('ws://'+location.host+'/ws');
+ ws.onclose=()=>{dot('#lc','bad');$('#cx').textContent='Sin conexión';setTimeout(con,1500)};
+ ws.onmessage=e=>{const d=JSON.parse(e.data);d.t=='s'?ver(d):cfgver(d.v)};
+}
+
+// Simulación: abierta como archivo, sin la tarjeta. window.simTest permite probar fallas, paro y desconexión.
+function mkSim(){
+ const s={si:0,fs:-1,msg:'',a1:20,a2:10,t1:20,t2:10,rel:[0,0,0,0],n:[0,0,0,0],col:-1,h:0,sat:0,d:100,c:0,T:0,ok:3,paro:1,pause:0};
+ const set=(si,m='')=>{if(si!=1)s.lu=null;s.si=si;s.msg=m;s.T=0},
+ // mismo indicador que ledEstado() del firmware, para ver el LED en la simulación
+ lc=()=>{const t=Date.now(),F=Math.floor,p1=F(t/500)%2,p2=F(t/250)%2,p4=F(t/125)%2,br=.12+.88*(.5-.5*Math.cos(t*.00314)),h=(r,g,b,k=1)=>[r,g,b].map(v=>Math.round(v*k).toString(16).padStart(2,'0')).join('').toUpperCase(),Z='000000';
+  if(s.si==12)return p4?h(40,0,0):Z;if(s.si==11)return p2?h(40,24,0):Z;if(s.ok!=3)return p1?h(32,0,32):Z;
+  if(s.si==1){const u=s.lu;if(!u)return h(0,30,30);if(u.fx==1)return h(u.r,u.g,u.b,br);if(u.fx==2)return p2?h(u.r,u.g,u.b):Z;
+   if(u.fx==3){const x=F(t/15)%360,m=x%120,up=m*40/120,dn=40-up;return x<120?h(dn,up,0):x<240?h(0,dn,up):h(up,0,dn)}return h(u.r,u.g,u.b)}
+  if(s.si==0)return h(0,0,40);if(s.si<=4)return h(0,40,0,br);return s.col>=0?[h(0,40,0),h(40,24,0),h(40,0,0)][s.col]:h(26,26,26)},near=(a,b)=>Math.abs(a-b)<.5,home=()=>{s.rel=[0,0,0,0];s.t1=cfg.rej;s.t2=cfg.s2rep};
+ const fail=(si,m)=>{if(s.si<11)s.fs=s.si;s.rel=[0,0,0,0];s.t1=s.a1;s.t2=s.a2;set(si,m)};
+ const DEF={s1min:20,s1max:160,rej:20,s2rep:10,s2up:45,s2wig:6,v1:90,v2:120,tasent:500,tcaida:1500,teco:1000,tstab:800,base:100,delta:15,tol:25,satmin:.25,hV:125,hA:55,hR:0,secV:0,secA:1,secR:2,plc:1};
+ cfgver(DEF);
+ setInterval(()=>{if(s.pause)return;const dt=.1;s.T+=100;
+  const st=(a,t,v)=>Math.abs(t-a)<=v*dt?t:a+Math.sign(t-a)*v*dt;s.a1=st(s.a1,s.t1,cfg.v1);s.a2=st(s.a2,s.t2,cfg.v2);
+  switch(s.si){
+   case 2:if(s.T>1500)s.d=62;if(s.T>1500+cfg.tstab){s.c=Math.floor(Math.random()*4);set(4)}break;
+   case 4:s.h=[125,55,2,250][s.c];s.sat=s.c<3?.68:.12;s.col=s.c<3?s.c:-1;s.t1=s.c<3?sec(s.c):cfg.rej;set(5,s.c<3?'Color '+N[s.c].toLowerCase():'Color no reconocido');break;
+   case 5:if(near(s.a1,s.t1)&&s.T>cfg.tasent){if(s.c<3)s.rel[s.c]=1;set(6,'Esperando el retorno del PLC')}break;
+   case 6:if(s.T>400){s.t2=cfg.s2up;set(7,s.c<3?'Expulsando la pieza al embudo':'Rechazando la pieza')}break;
+   case 7:if(near(s.a2,s.t2))set(8,'Esperando la caída');break;
+   case 8:if(s.T>cfg.tcaida){s.t2=cfg.s2rep;s.d=100;set(9,'Verificando la charola')}break;
+   case 9:if(near(s.a2,s.t2)&&s.T>500){s.n[s.c<3?s.c:3]++;s.rel=[0,0,0,0];set(10,'Liberando las señales del PLC')}break;
+   case 10:s.t1=cfg.rej;if(near(s.a1,s.t1)){s.col=-1;set(2)}break;
+  }
+  const r=s.rel;ver({si:s.si,fs:s.fs,te:s.T,st:'',msg:s.msg,col:s.col,h:Math.round(s.h),s:s.sat,r:900,g:1400,b:600,c:3100,d:s.d,pz:s.d<85?1:0,rel:r,ret:[r[0],r[1],r[2],s.paro],a1:s.a1,a2:s.a2,n:s.n,ok:s.ok,lc:lc()});
+ },100);
+ window.simTest={err:(m='Error de comunicación con el PLC')=>fail(11,m),paro:()=>{s.paro=0;fail(12,'Paro de emergencia activo')},soltarParo:()=>{s.paro=1},off:()=>{s.pause=1},on:()=>{s.pause=0},sensor:(ok=1)=>{s.ok=ok}};
+ return {cmd(m){const [c,a='']=m.split(/:(.*)/),free=s.si<2;
+  if(c=='auto'&&free&&s.ok==3){home();set(2)}
+  else if(c=='stop'&&s.si<11){home();s.col=-1;s.d=100;set(0)}
+  else if(c=='manual'&&(s.si==0||s.si==2))set(1);
+  else if(c=='reset'&&s.si>10&&(s.paro||cfg.plc<.5)){s.fs=-1;set(0)}
+  else if(s.si==1&&c=='m1')s.t1=+a;else if(s.si==1&&c=='m2')s.t2=+a;
+  else if(s.si==1&&c=='rele'){const [i,v]=a.split(':');s.rel[+i]=+v}
+  else if(s.si==1&&c=='led'){if(a=='auto')s.lu=null;else{const [r,g,b,fx]=a.split(',').map(Number);s.lu={r:r*40/255,g:g*40/255,b:b*40/255,fx}}}
+  else if(c=='set'&&(free||s.si>10)){const [k,v]=a.split('=');setTimeout(()=>cfgver({[k]:+v}),150)}
+  else if(c=='reboot'&&(s.si<2||s.si>10)){s.pause=1;setTimeout(()=>{s.rel=[0,0,0,0];s.fs=-1;s.d=100;s.col=-1;set(0);s.pause=0},3000)}
+  else if(c=='defaults'&&free){s.n=[0,0,0,0];s.col=-1;home();set(0);setTimeout(()=>cfgver(DEF),150)}
+  else if(c=='calvacia'&&(free||s.si>10))cfgver({base:s.d});else if(c=='calcolor'&&(free||s.si>10))cfgver({[['hV','hA','hR'][+a]]:s.h});
+ }};
+}
+if(!/^https?:$/.test(location.protocol)||/[?&]sim\b/.test(location.search)){$('#cx').textContent='Simulación';dot('#lc','sim');sim=mkSim()}else con();
+</script></body></html>
